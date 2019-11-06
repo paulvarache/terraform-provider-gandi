@@ -7,7 +7,7 @@ trigger:
 - master
 
 jobs:
-- job: Build
+- job: Win32
   pool:
     vmImage: 'windows-latest'
   steps:
@@ -17,9 +17,24 @@ jobs:
       arguments: '-o $(Build.ArtifactStagingDirectory)/terraform-provider-gandi.exe'
   - task: PublishBuildArtifacts@1
     inputs:
-      ArtifactName: Build
+      ArtifactName: Win32
+
+- job: Linux
+  pool:
+    vmImage: 'ubuntu-18.04'
+  steps:
+  - task: Go@0
+    inputs:
+      command: 'build'
+      arguments: '-o $(Build.ArtifactStagingDirectory)/terraform-provider-gandi'
+  - task: PublishBuildArtifacts@1
+    inputs:
+      ArtifactName: Linux
+
 - job: Archive
-  dependsOn: Build
+  dependsOn:
+  - Win32
+  - Linux
   pool:
     vmImage: 'ubuntu-18.04'
   steps:
@@ -29,10 +44,15 @@ jobs:
       secureFile: 'azure-pipelines-binaries.json'
   - task: DownloadBuildArtifacts@0
     inputs:
-      artifactName: Build
+      artifactName: Win32
+      downloadPath: $(Pipeline.Workspace)
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      artifactName: Linux
       downloadPath: $(Pipeline.Workspace)
   - script: |
-      docker run --rm -v $(gcloud_keyfile.secureFilePath):/secrets/gcloud-keyfile.json -v $(Pipeline.Workspace)/Build/terraform-provider-gandi.exe:/workspace/terraform-provider-gandi.exe google/cloud-sdk /bin/bash -c "gcloud auth activate-service-account --key-file /secrets/gcloud-keyfile.json && gsutil cp /workspace/terraform-provider-gandi.exe gs://pv-binaries/terraform-provider-gandi/$(version)/win32/terraform-provider-gandi.exe"
+      docker run --rm -v $(gcloud_keyfile.secureFilePath):/secrets/gcloud-keyfile.json -v $(Pipeline.Workspace)/Win32/terraform-provider-gandi.exe:/workspace/terraform-provider-gandi.exe google/cloud-sdk /bin/bash -c "gcloud auth activate-service-account --key-file /secrets/gcloud-keyfile.json && gsutil cp /workspace/terraform-provider-gandi.exe gs://pv-binaries/terraform-provider-gandi/$(version)/win32/terraform-provider-gandi.exe"
+      docker run --rm -v $(gcloud_keyfile.secureFilePath):/secrets/gcloud-keyfile.json -v $(Pipeline.Workspace)/Linux/terraform-provider-gandi:/workspace/terraform-provider-gandi google/cloud-sdk /bin/bash -c "gcloud auth activate-service-account --key-file /secrets/gcloud-keyfile.json && gsutil cp /workspace/terraform-provider-gandi gs://pv-binaries/terraform-provider-gandi/$(version)/linux/terraform-provider-gandi"
     displayName: Run gsutil
 
 
